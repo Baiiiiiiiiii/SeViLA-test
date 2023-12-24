@@ -1,0 +1,3 @@
+mkdir -p dataset && curl -o dataset/STAR_train.json https://star-benchmark.s3.us-east.cloud-object-storage.appdomain.cloud/Question_Answer_SituationGraph/STAR_train.json
+curl -o dataset/STAR_val.json https://star-benchmark.s3.us-east.cloud-object-storage.appdomain.cloud/Question_Answer_SituationGraph/STAR_val.json
+curl -o dataset/STAR_test.json https://star-benchmark.s3.us-east.cloud-object-storage.appdomain.cloud/Question_Answer_SituationGraph/STAR_test.json

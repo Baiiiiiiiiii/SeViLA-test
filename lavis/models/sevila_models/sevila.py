@@ -71,7 +71,7 @@ class SeViLA(Blip2Base):
 
         # Q-Former for Answerer
         self.Qformer, self.query_tokens = self.init_Qformer(
-        num_query_token, self.visual_encoder.num_features)
+            num_query_token, self.visual_encoder.num_features)
         self.Qformer.cls = None
         self.Qformer.bert.embeddings.word_embeddings = None
         self.Qformer.bert.embeddings.position_embeddings = None
@@ -79,13 +79,12 @@ class SeViLA(Blip2Base):
             layer.output = None
             layer.intermediate = None
         self.num_query_token = num_query_token
-        self.t5_proj = nn.Linear(
-        self.Qformer.config.hidden_size, self.t5_model.config.hidden_size)
+        self.t5_proj = nn.Linear(self.Qformer.config.hidden_size, self.t5_model.config.hidden_size)
         
         # Q-Former for Localizer
         if 'loc' in task:
             self.Qformer_loc, self.query_tokens_loc = self.init_Qformer(
-            num_query_token, self.visual_encoder.num_features)
+                num_query_token, self.visual_encoder.num_features)
 
             self.Qformer_loc.cls = None
             self.Qformer_loc.bert.embeddings.word_embeddings = None

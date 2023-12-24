@@ -103,7 +103,7 @@ class Blip2Base(BaseModel):
         return msg
     
     def load_qformer_loc(self):
-        url_or_filename = '/nas-hdd/shoubin/pretrained_model/hub/checkpoints/qformer_loc.pth'
+        url_or_filename = '/home/eric/temp/SeViLA/sevila_checkpoints/sevila_pretrained.pth'
         checkpoint = torch.load(url_or_filename, map_location="cpu")
         state_dict = checkpoint["model"]
         msg = self.load_state_dict(state_dict, strict=False)
