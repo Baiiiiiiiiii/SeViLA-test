@@ -12,7 +12,12 @@ datasets:
           url: /home/eric/temp/SeViLA-test/sevila_data/star/val.json
           storage: /home/eric/temp/SeViLA-test/sevila_data/star/val.json
         test:
-          url: /home/eric/temp/SeViLA-test/sevila_data/star/val.json
-          storage: /home/eric/temp/SeViLA-test/sevila_data/star/val.json
+          url: /home/eric/temp/SeViLA-test/sevila_data/star/test.json
+          storage: /home/eric/temp/SeViLA-test/sevila_data/star/test.json
       videos:
-        storage: /home/eric/temp/SeViLA-test/dataset/Charades_v1_480
+        storage: /home/eric/temp/SeViLA/dataset/Charades_v1_480
+      visual_feature:
+        train:
+          storage: /home/eric/temp/SeViLA-test/vis_feat_test.pt
+        val:
+          storage: /home/eric/temp/SeViLA-test/vis_feat_test.pt

@@ -213,6 +213,11 @@ class BaseDatasetBuilder:
             #print('vis_path2', vis_path)
             if not os.path.exists(vis_path):
                 warnings.warn("storage path {} does not exist.".format(vis_path))
+                
+            if is_train:
+                vis_feat_path = build_info.visual_feature.train.storage
+            else:
+                vis_feat_path = build_info.visual_feature.val.storage
 
             # create datasets
             dataset_cls = self.train_dataset_cls if is_train else self.eval_dataset_cls
@@ -221,6 +226,7 @@ class BaseDatasetBuilder:
                 text_processor=text_processor,
                 ann_paths=ann_paths,
                 vis_root=vis_path,
+                vis_feat_pt_file=vis_feat_path,
             )
 
         return datasets

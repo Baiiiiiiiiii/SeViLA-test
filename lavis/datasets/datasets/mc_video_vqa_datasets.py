@@ -28,8 +28,8 @@ class __DisplMixin:
 ANS_MAPPING = {0:'A',1:'B',2:'C',3:'D',4:'E'}
 # NextQA
 class MCVideoQADataset(MultimodalClassificationDataset, __DisplMixin):
-    def __init__(self, vis_processor, text_processor, vis_root, ann_paths):
-        super().__init__(vis_processor, text_processor, vis_root, ann_paths)
+    def __init__(self, vis_processor, text_processor, vis_root, ann_paths, vis_feat_pt_file):
+        super().__init__(vis_processor, text_processor, vis_root, ann_paths, vis_feat_pt_file)
 
     def _load_auxiliary_mappings(self):
         pass
@@ -47,6 +47,11 @@ class MCVideoQADataset(MultimodalClassificationDataset, __DisplMixin):
 
             ann = self.annotation[index]
             qid = ann['qid'] 
+            
+            # vis_feat = torch.load(self.vis_feat_pt_file)["Interaction_T1_4"]
+            # print(vis_feat)
+            # breakpoint
+            vis_feat = torch.load(self.vis_feat_pt_file)[qid]
 
             if 'QVHighlight' in qid:
                 q = ann['query']
@@ -97,7 +102,11 @@ class MCVideoQADataset(MultimodalClassificationDataset, __DisplMixin):
                 hints += ')'
                 qa_prompt = prompt + ' Considering the information presented in the frame, select the correct answer from the options.'
                 loc_prompt = 'Question: ' + q +  ' ' + hints + ' Does the information within the frame provide the necessary details to accurately answer the given question?'                
-                answers = 'Option ' + ANS_MAPPING[int(ann['answer'])]
+                try:
+                    answers = 'Option ' + ANS_MAPPING[int(ann['answer'])]
+                # for test split
+                except:
+                    answers = 'Option ' + ANS_MAPPING[int(1)]
                 duration = 1
             
             try:
@@ -150,5 +159,6 @@ class MCVideoQADataset(MultimodalClassificationDataset, __DisplMixin):
             "loc_input": loc_prompt,
             "qa_output": answers,
             "question_id": qid,
-            'duration': duration
+            'duration': duration,
+            "vis_feature": vis_feat,
         }
