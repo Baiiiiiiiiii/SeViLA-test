@@ -36,7 +36,7 @@ class SeViLA(Blip2Base):
 
     def __init__( self, img_size=224, drop_path_rate=0,
         use_grad_checkpoint=False, vit_precision="fp16", freeze_vit=True,
-        num_query_token=32, t5_model="google/flan-t5-xl", prompt="",
+        num_query_token=32, addfeat_hidden_size=768, t5_model="google/flan-t5-xl", prompt="",
         max_txt_len=32, frame_num=8, answer_num=5, apply_lemmatizer=False, task='qa'):
         """
         apply_lemmatizer: when set to True, postprocess predict_answers() result with lemmas.
@@ -44,7 +44,7 @@ class SeViLA(Blip2Base):
         super().__init__()
         
         self.task = task
-        
+        self.addfeat_hidden_size = addfeat_hidden_size #768
         # vision backbone
         self.visual_encoder, self.ln_vision, self.ln_vision_loc = self.init_vision_encoder_sevila(
             img_size, drop_path_rate, use_grad_checkpoint, vit_precision)
@@ -70,6 +70,7 @@ class SeViLA(Blip2Base):
             param.data = param.data.bfloat16() 
 
         # Q-Former for Answerer
+        
         self.Qformer, self.query_tokens = self.init_Qformer(
             num_query_token, self.visual_encoder.num_features)
         self.Qformer.cls = None
@@ -79,8 +80,13 @@ class SeViLA(Blip2Base):
             layer.output = None
             layer.intermediate = None
         self.num_query_token = num_query_token
+        self.addfeat_proj = nn.Linear(self.addfeat_hidden_size , 1408)
+        self.addfeat_proj.requires_grad = True
+        self.ego4d_proj = nn.Linear(self.addfeat_hidden_size , self.t5_model.config.hidden_size)
+        self.ego4d_proj.requires_grad = True
         self.t5_proj = nn.Linear(self.Qformer.config.hidden_size, self.t5_model.config.hidden_size)
         
+        #qvh_freeze_loc_freeze_qa_vid
         # Q-Former for Localizer
         if 'loc' in task:
             self.Qformer_loc, self.query_tokens_loc = self.init_Qformer(
@@ -137,6 +143,7 @@ class SeViLA(Blip2Base):
         _, n, _ = image_embeds.shape
         image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(image.device) # bt n c
         
+        #qvh_freeze_loc_freeze_qa_vid
         # Localizer self-refinement
         if 'train_loc' in self.task:
 
@@ -247,6 +254,132 @@ class SeViLA(Blip2Base):
             return {"loss": loss}
         
         # Finetune answerer with localizer
+        elif 'train_addfeat' in self.task:
+            with torch.no_grad():
+                image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(image.device) # bt n c
+                image_embeds_, image_atts_ = image_embeds.detach().clone(), image_atts.detach().clone()
+                image_embeds_ = self.ln_vision_loc(image_embeds_)
+            
+                text_input_loc = samples['loc_input']
+                query_tokens_loc = self.query_tokens_loc.expand(image_embeds_.shape[0], -1, -1)
+                query_output_loc = self.Qformer_loc.bert(
+                    query_embeds=query_tokens_loc, encoder_hidden_states=image_embeds_,
+                    encoder_attention_mask=image_atts_, return_dict=True)
+                inputs_t5_loc = self.t5_proj_loc(query_output_loc.last_hidden_state)
+
+                atts_t5_loc = torch.ones(inputs_t5_loc.size()[:-1], dtype=torch.long).to(image.device)
+                with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+
+                    frame_prefix = self.t5_tokenizer(
+                        self.frame_prefix, padding="longest", add_special_tokens=False,
+                        truncation=True, max_length=self.max_txt_len, return_tensors="pt").to(image.device)
+                    frame_prefix_id = torch.repeat_interleave(frame_prefix.input_ids, b*t, 0)
+                    frame_prefix_mask = torch.repeat_interleave(frame_prefix.attention_mask, b*t, 0)
+                    frame_predix_embed = self.t5_model.encoder.embed_tokens(frame_prefix_id)
+                    input_tokens_loc = self.t5_tokenizer(
+                        text_input_loc, padding="longest", truncation=True,
+                        max_length=self.max_txt_len, return_tensors="pt").to(image.device)
+                    input_ids_loc = torch.repeat_interleave(input_tokens_loc.input_ids, t, 0)
+                    input_attention_mask_loc = torch.repeat_interleave(input_tokens_loc.attention_mask, t, 0)
+                    inputs_embeds_loc = self.t5_model.encoder.embed_tokens(input_ids_loc)              
+                    inputs_embeds_loc = torch.cat([frame_predix_embed, inputs_t5_loc, inputs_embeds_loc], dim=1)
+                    encoder_atts_loc = torch.cat([frame_prefix_mask, atts_t5_loc, input_attention_mask_loc], dim=1)
+    
+                    outputs_loc = self.t5_model.generate(
+                        inputs_embeds=inputs_embeds_loc, attention_mask=encoder_atts_loc,
+                        do_sample=use_nucleus_sampling, top_p=top_p, temperature=temperature, num_beams=1,
+                        max_new_tokens=max_length, min_length=min_length, repetition_penalty=repetition_penalty,
+                        length_penalty=length_penalty, num_return_sequences=num_captions,
+                        return_dict_in_generate=True, output_hidden_states=True, output_scores=True)
+                            
+                    pred_logits_loc = outputs_loc.scores[0]
+                    loc_yes = pred_logits_loc[:, self.yes_id]
+                    loc_yes = loc_yes.reshape(b, -1)
+            # remain modified        
+            addfeat = samples['vis_feature'] ## unmasked, ego4d vit features
+            text_input_qa = samples['qa_input']
+            answer = samples['qa_output'] # Option A ...
+            select_frames_idx = torch.topk(loc_yes, self.frame_num, dim=-1).indices.tolist()
+            sorted_frames_idx = []
+            image_embeds = self.ln_vision(image_embeds)
+            image_embeds = image_embeds.reshape(b, t, n, -1)
+            for frames in select_frames_idx:
+                sorted_frames_idx.append(sorted(frames))
+            select_frames = []
+            for i, fs in enumerate(sorted_frames_idx): 
+                video = []
+                for j, f in enumerate(fs):
+                    video.append(image_embeds[i][f])
+                video = torch.stack(video, dim=0) # 4, n , -1
+                select_frames.append(video)
+                    
+            select_frames = torch.stack(select_frames, dim=0) # b 4, n , -1
+            select_frames = select_frames.reshape(-1, select_frames.shape[-2], select_frames.shape[-1])
+            image_atts = torch.ones(select_frames.size()[:-1], dtype=torch.long).to(image.device) # bt n c
+            '''sf = select_frames.reshape(b, -1, select_frames.shape[-2], select_frames.shape[-1]) ### 2 4 257 1408
+            addfeat = addfeat.reshape(b, -1,(select_frames.shape[-2]-1),addfeat.shape[-1])# b*8, ### 2 2048(8*256) 768
+            addfeat_tf = self.addfeat_proj(addfeat) ### 768->1408
+            print(f'addfeat_tf before cat: {addfeat_tf.shape}')
+            qt_sf_addf = torch.cat([sf[:,:,:-1,:], addfeat_tf], dim=1) ### 2, (4+8), 256, 1408
+            print(f'qt_sf_addf after cat: {qt_sf_addf.shape}')
+            qt_sf_addf = qt_sf_addf.reshape(-1, (select_frames.shape[-2]-1), select_frames.shape[-1]) ###
+            print(f'qt_sf_addf before qformer: {qt_sf_addf.shape}')
+            '''#addf_tf_atts = torch.ones(addfeat_tf.size()[:-1], dtype=torch.long).to(image.device)
+            ## remain concerned: concat方式需要調整
+            #qt_sf_addf = torch.cat([select_frames, addfeat_tf], dim=0)
+            '''print(f'query_token before expand: {self.query_tokens.shape}')
+            query_tokens_qa = self.query_tokens.expand(qt_sf_addf.shape[0], -1, -1) #select_frames.shape[0], -1, -1 ###
+            print(f'query_token after expand: {query_tokens_qa.shape}')
+            atts_sf_addf = torch.ones(qt_sf_addf.size()[:-1], dtype=torch.long).to(image.device)#torch.cat([image_atts, addf_tf_atts], dim=0) ###
+            print(f'atts_sf_addf: {atts_sf_addf.shape}')'''
+            query_tokens_qa = self.query_tokens.expand(select_frames.shape[0], -1, -1) ###
+            query_output_qa = self.Qformer.bert(
+                query_embeds=query_tokens_qa, encoder_hidden_states=select_frames,
+                encoder_attention_mask=image_atts, return_dict=True)
+            inputs_t5_qa = self.t5_proj(query_output_qa.last_hidden_state)
+            inputs_t5_qa = inputs_t5_qa.reshape(b, -1, inputs_t5_qa.shape[-2], inputs_t5_qa.shape[-1])
+            atts_t5_qa = torch.ones(inputs_t5_qa.size()[:-1], dtype=torch.long).to(image.device)
+            
+            with torch.cuda.amp.autocast(dtype=torch.bfloat16):        
+                vid_prefix = self.t5_tokenizer(
+                    self.vid_prefix, padding="longest", add_special_tokens=False,
+                    truncation=True, max_length=self.max_txt_len, return_tensors="pt",).to(image.device) # 
+                vid_prefix_id = torch.repeat_interleave(vid_prefix.input_ids.unsqueeze(0), b, 0)
+                vid_prefix_mask = torch.repeat_interleave(vid_prefix.attention_mask.unsqueeze(0), b, 0)
+                vid_prefix_embed = self.t5_model.encoder.embed_tokens(vid_prefix_id) # b t n_word c
+                
+                # ego4d video feature
+                ego4d_feat = self.ego4d_proj(addfeat)  #(b, 1, 768)
+                # print(f'ego4d after proj: {ego4d_feat.shape}')
+                atts_ego4d =torch.ones(ego4d_feat.size()[:-1], dtype=torch.long).to(image.device)
+                atts_ego4d = atts_ego4d.reshape(b, -1)
+                # print(f'ego4d atts: {atts_ego4d.shape}')     
+                inputs_t5_qa = torch.cat([vid_prefix_embed, inputs_t5_qa], dim=2) # b, t, n_word + m +8 frames, c
+                atts_t5_qa = torch.cat([vid_prefix_mask, atts_t5_qa], dim=2) # b, t, n_word + m +8 frames
+                inputs_t5_qa = inputs_t5_qa.reshape(b, -1, inputs_t5_qa.shape[-1])
+                atts_t5_qa = atts_t5_qa.reshape(b, -1)
+                        
+                input_tokens_qa = self.t5_tokenizer(
+                    text_input_qa, padding="longest", truncation=True,
+                    max_length=self.max_txt_len, return_tensors="pt").to(image.device)
+                inputs_embeds_qa = self.t5_model.encoder.embed_tokens(input_tokens_qa.input_ids) 
+                inputs_embeds_qa = torch.cat([inputs_t5_qa, ego4d_feat, inputs_embeds_qa], dim=1) #torch.cat([inputs_t5_qa, inputs_embeds_qa], dim=1) 
+                encoder_atts_qa = torch.cat([atts_t5_qa, atts_ego4d, input_tokens_qa.attention_mask], dim=1) #torch.cat([atts_t5_qa, input_tokens_qa.attention_mask], dim=1) 
+                # print(f'inputs_embeds_qa before t5: {inputs_embeds_qa.shape}')
+                # print(f'encoder_atts_qa: {encoder_atts_qa.shape}')
+                output_tokens_qa = self.t5_tokenizer(
+                    answer, padding="longest", truncation=True,
+                    max_length=self.max_txt_len, return_tensors="pt").to(image.device)
+                targets_qa = output_tokens_qa.input_ids.masked_fill(
+                    output_tokens_qa.input_ids == self.t5_tokenizer.pad_token_id, -100)
+                output_tokens_mask_qa = output_tokens_qa.attention_mask
+                
+                outputs_qa = self.t5_model(
+                    inputs_embeds=inputs_embeds_qa, attention_mask=encoder_atts_qa,
+                    decoder_attention_mask=output_tokens_mask_qa, return_dict=True, labels=targets_qa)
+                loss = outputs_qa.loss
+                
+                return {"loss": loss}
         elif 'train_qa_with_loc' in self.task:
             # frame selection
             with torch.no_grad():
@@ -458,7 +591,7 @@ class SeViLA(Blip2Base):
         out = {}
         image, qid = samples["video"], samples['question_id']
         text_input_qa, answer = samples['qa_input'], samples['qa_output']
-        
+        addfeat = samples['vis_feature']
         # uniform sampling
         if 'loc' not in self.task or 'uni_eval' in self.task:
             b, t, c, w, h = image.shape        
@@ -603,10 +736,30 @@ class SeViLA(Blip2Base):
                     select_frames = torch.stack(select_frames, dim=0) # b 4, n , -1
                     select_frames = select_frames.reshape(-1, select_frames.shape[-2], select_frames.shape[-1])
                     image_atts = torch.ones(select_frames.size()[:-1], dtype=torch.long).to(image.device) # bt n c
-                    query_tokens_qa = self.query_tokens.expand(select_frames.shape[0], -1, -1)
+                    '''sf = select_frames.reshape(b, -1, select_frames.shape[-2], select_frames.shape[-1]) ### 2 4 257 1408
+                    addfeat = addfeat.reshape(b, -1,(select_frames.shape[-2]-1),addfeat.shape[-1])# b*8, ### 2 2048(8*256) 768
+                    addfeat_tf = self.addfeat_proj(addfeat) ### 768->1408
+                    print(f'addfeat_tf before cat: {addfeat_tf.shape}')
+                    qt_sf_addf = torch.cat([sf[:,:,:-1,:], addfeat_tf], dim=1) ### 2, (4+8), 256, 1408
+                    print(f'qt_sf_addf after cat: {qt_sf_addf.shape}')
+                    qt_sf_addf = qt_sf_addf.reshape(-1, (select_frames.shape[-2]-1), select_frames.shape[-1]) ###
+                    print(f'qt_sf_addf before qformer: {qt_sf_addf.shape}')
+                    #addf_tf_atts = torch.ones(addfeat_tf.size()[:-1], dtype=torch.long).to(image.device)
+                    ## remain concerned: concat方式需要調整
+                    #qt_sf_addf = torch.cat([select_frames, addfeat_tf], dim=0)
+                    print(f'query_token before expand: {self.query_tokens.shape}')
+                    query_tokens_qa = self.query_tokens.expand(qt_sf_addf.shape[0], -1, -1) #select_frames.shape[0], -1, -1 ###
+                    print(f'query_token after expand: {query_tokens_qa.shape}')
+                    atts_sf_addf = torch.ones(qt_sf_addf.size()[:-1], dtype=torch.long).to(image.device)#torch.cat([image_atts, addf_tf_atts], dim=0) ###
+                    print(f'atts_sf_addf: {atts_sf_addf.shape}')'''
+                    query_tokens_qa = self.query_tokens.expand(select_frames.shape[0], -1, -1) ###
                     query_output_qa = self.Qformer.bert(
                         query_embeds=query_tokens_qa, encoder_hidden_states=select_frames,
                         encoder_attention_mask=image_atts, return_dict=True)
+                    #query_tokens_qa = self.query_tokens.expand(select_frames.shape[0], -1, -1)
+                    #query_output_qa = self.Qformer.bert(
+                    #    query_embeds=query_tokens_qa, encoder_hidden_states=select_frames,
+                    #    encoder_attention_mask=image_atts, return_dict=True)
                     inputs_t5_qa = self.t5_proj(query_output_qa.last_hidden_state)
                     inputs_t5_qa = inputs_t5_qa.reshape(b, -1, inputs_t5_qa.shape[-2], inputs_t5_qa.shape[-1])
                     atts_t5_qa = torch.ones(inputs_t5_qa.size()[:-1], dtype=torch.long).to(image.device)
@@ -618,6 +771,10 @@ class SeViLA(Blip2Base):
                     vid_prefix_mask = torch.repeat_interleave(vid_prefix.attention_mask.unsqueeze(0), b, 0)
                     vid_prefix_embed = self.t5_model.encoder.embed_tokens(vid_prefix_id) # b t n_word c
                     
+                    # ego4d video feature
+                    ego4d_feat = self.ego4d_proj(addfeat)  #(b, 1, 768)
+                    atts_ego4d =torch.ones(ego4d_feat.size()[:-1], dtype=torch.long).to(image.device)
+                    atts_ego4d = atts_ego4d.reshape(b, -1)  
                     inputs_t5_qa = torch.cat([vid_prefix_embed, inputs_t5_qa], dim=2) # b, t, n_word + m, c
                     atts_t5_qa = torch.cat([vid_prefix_mask, atts_t5_qa], dim=2) # b, t, n_word + m 
                     inputs_t5_qa = inputs_t5_qa.reshape(b, -1, inputs_t5_qa.shape[-1])
@@ -627,8 +784,8 @@ class SeViLA(Blip2Base):
                         text_input_qa, padding="longest", truncation=True,
                         max_length=self.max_txt_len, return_tensors="pt").to(image.device)
                     inputs_embeds_qa = self.t5_model.encoder.embed_tokens(input_tokens_qa.input_ids) 
-                    inputs_embeds_qa = torch.cat([inputs_t5_qa, inputs_embeds_qa], dim=1)
-                    encoder_atts_qa = torch.cat([atts_t5_qa, input_tokens_qa.attention_mask], dim=1)
+                    inputs_embeds_qa = torch.cat([inputs_t5_qa, ego4d_feat, inputs_embeds_qa], dim=1) #cat([inputs_t5_qa, inputs_embeds_qa], dim=1)
+                    encoder_atts_qa = torch.cat([atts_t5_qa, atts_ego4d, input_tokens_qa.attention_mask], dim=1) #cat([atts_t5_qa, input_tokens_qa.attention_mask], dim=1)
                     
                 else:
                     select_frames_idx = torch.argmax(loc_yes, -1)
@@ -883,26 +1040,26 @@ class SeViLA(Blip2Base):
     ):
         image = samples["image"]
         with torch.cuda.amp.autocast(enabled=(self.device != torch.device("cpu"))):
-            image_embeds = self.ln_vision(self.visual_encoder(image))
+            image_embeds = self.ln_vision(self.visual_encoder(image)) # image embedding output of ViT
         image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(
             image.device
-        )
+        ) # attention metrix of image_embeds(with same size?)
 
-        query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
+        query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1) #query_token include image_embeds as inputs of Qformer
         query_output = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_atts,
             return_dict=True,
-        )
+        ) # output of qformer
 
         inputs_t5 = self.t5_proj(query_output.last_hidden_state)
         atts_t5 = torch.ones(inputs_t5.size()[:-1], dtype=torch.long).to(image.device)
 
         if isinstance(samples["text_input"], str):
-            samples["text_input"] = [samples["text_input"]]
+            samples["text_input"] = [samples["text_input"]] # transform to an array(list)
         if prompt:
-            text_input = [prompt.format(question) for question in samples["text_input"]]
+            text_input = [prompt.format(question) for question in samples["text_input"]] # add prompt to text_input if exists
         else:
             text_input = samples["text_input"]
 

@@ -440,6 +440,7 @@ class VideoQA(BaseTask):
         
         for a, q, o, f in zip(answer, qid, output_text, frame_idx):
             # l =  l[self.ANS_MAPPING[a[-1]]]
+            # predict json file is results
             results.append(
                 {
                     "qid": q,

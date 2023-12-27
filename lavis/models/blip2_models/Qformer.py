@@ -202,6 +202,7 @@ class BertSelfAttention(nn.Module):
         past_key_value = (key_layer, value_layer)
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
+        # print(query_layer)
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
 
         if (

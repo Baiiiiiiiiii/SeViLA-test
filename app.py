@@ -5,7 +5,7 @@ from torchvision import transforms
 from lavis.processors import transforms_video
 from lavis.datasets.data_utils import load_video_demo
 from lavis.processors.blip_processors import ToUint8, ToTHWC
-from lavis.models.sevila_models.sevila import SeViLA
+from lavis.models.sevila_models.sevila_sota import SeViLA
 from typing import Optional
 import warnings
 # model config

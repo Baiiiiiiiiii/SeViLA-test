@@ -18,6 +18,11 @@ datasets:
         storage: /home/eric/temp/SeViLA/dataset/Charades_v1_480
       visual_feature:
         train:
-          storage: /home/eric/temp/SeViLA-test/vis_feat_test.pt
+          storage: /home/eric/temp/SeViLA-test/FVQA_train_ViT14_feats.pth
         val:
-          storage: /home/eric/temp/SeViLA-test/vis_feat_test.pt
+          storage: /home/eric/temp/SeViLA-test/FVQA_val_ViT14_feats.pth
+      text_caption:
+        train:
+          storage: /home/eric/temp/SeViLA-test/pdvc_qid2cap_dict.pt
+        val:
+          storage: /home/eric/temp/SeViLA-test/pdvc_qid2cap_dict.pt

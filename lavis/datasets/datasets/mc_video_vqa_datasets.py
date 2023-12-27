@@ -28,8 +28,26 @@ class __DisplMixin:
 ANS_MAPPING = {0:'A',1:'B',2:'C',3:'D',4:'E'}
 # NextQA
 class MCVideoQADataset(MultimodalClassificationDataset, __DisplMixin):
-    def __init__(self, vis_processor, text_processor, vis_root, ann_paths, vis_feat_pt_file):
-        super().__init__(vis_processor, text_processor, vis_root, ann_paths, vis_feat_pt_file)
+    def __init__(self, vis_processor, text_processor, vis_root, ann_paths, vis_feat_pt_file, caption_path):
+        super().__init__(vis_processor, text_processor, vis_root, ann_paths, vis_feat_pt_file, caption_path)
+        
+        
+        
+        # ====test line
+        if self.vis_feat_pt_file!=None:
+            self.vis_feats = torch.load(self.vis_feat_pt_file)
+        else:
+            self.vis_feats=None
+        # print(vis_feat)
+        # breakpoint
+        # =====real vis_feat
+        # vis_feat = torch.load(self.vis_feat_pt_file)[qid]
+        if self.caption_path!=None:
+            self.caption_texts = torch.load(self.caption_path)
+        else:
+            self.caption_texts=None       
+        
+        
 
     def _load_auxiliary_mappings(self):
         pass
@@ -48,10 +66,38 @@ class MCVideoQADataset(MultimodalClassificationDataset, __DisplMixin):
             ann = self.annotation[index]
             qid = ann['qid'] 
             
-            # vis_feat = torch.load(self.vis_feat_pt_file)["Interaction_T1_4"]
+            
+            if self.vis_feats!=None:
+                # vis_feat = self.vis_feats["Interaction_T1_4"].detach().cpu()
+                vis_feat = self.vis_feats[qid]
+            else:
+                vis_feat=None
             # print(vis_feat)
             # breakpoint
-            vis_feat = torch.load(self.vis_feat_pt_file)[qid]
+            # =====real vis_feat
+            # vis_feat = torch.load(self.vis_feat_pt_file)[qid]
+            if self.caption_texts!=None:
+                caption_text = self.caption_texts[qid]
+            else:
+                caption_text=None
+            
+            
+            
+            
+            # ====test line
+            # if self.vis_feat_pt_file!=None:
+            #     vis_feat = torch.load(self.vis_feat_pt_file)["Interaction_T1_4"].detach().cpu()
+            # else:
+            #     vis_feat=None
+            # # print(vis_feat)
+            # # breakpoint
+            # # =====real vis_feat
+            # # vis_feat = torch.load(self.vis_feat_pt_file)[qid]
+            # if self.caption_path!=None:
+            #     caption_text = torch.load(self.caption_path)[qid]
+            # else:
+            #     caption_text=None
+
 
             if 'QVHighlight' in qid:
                 q = ann['query']
@@ -161,4 +207,5 @@ class MCVideoQADataset(MultimodalClassificationDataset, __DisplMixin):
             "question_id": qid,
             'duration': duration,
             "vis_feature": vis_feat,
+            "caption_text":caption_text,
         }

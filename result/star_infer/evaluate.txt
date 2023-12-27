@@ -1,0 +1,2 @@
+{"val": {"agg_metrics": 44.557778046529265, "total": 7098, "Interaction": 48.33194328607173, "Sequence": 45.231455660903514, "Prediction": 44.871794871794876, "Feasibility": 39.795918367346935}}
+{"val": {"agg_metrics": 44.557778046529265, "total": 7098, "Interaction": 48.33194328607173, "Sequence": 45.231455660903514, "Prediction": 44.871794871794876, "Feasibility": 39.795918367346935}}

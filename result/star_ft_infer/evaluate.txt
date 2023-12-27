@@ -1,0 +1,7 @@
+{"val": {"agg_metrics": 44.557778046529265, "total": 7098, "Interaction": 48.33194328607173, "Sequence": 45.231455660903514, "Prediction": 44.871794871794876, "Feasibility": 39.795918367346935}}
+{"val": {"agg_metrics": 43.15825926891335, "total": 7098, "Interaction": 47.78982485404504, "Sequence": 44.590072504182935, "Prediction": 40.86538461538461, "Feasibility": 39.38775510204081}}
+{"val": {"agg_metrics": 57.343692222910015, "total": 7098, "Interaction": 59.09090909090909, "Sequence": 63.88733965421082, "Prediction": 54.96794871794872, "Feasibility": 51.42857142857142}}
+{"val": {"agg_metrics": 57.343692222910015, "total": 7098, "Interaction": 59.09090909090909, "Sequence": 63.88733965421082, "Prediction": 54.96794871794872, "Feasibility": 51.42857142857142}}
+{"val": {"agg_metrics": 57.343692222910015, "total": 7098, "Interaction": 59.09090909090909, "Sequence": 63.88733965421082, "Prediction": 54.96794871794872, "Feasibility": 51.42857142857142}}
+{"test": {"agg_metrics": 23.16173536539845, "total": 7377, "Interaction": 25.31104199066874, "Sequence": 25.782583949914628, "Prediction": 24.162011173184357, "Feasibility": 17.391304347826086}}
+{"test": {"agg_metrics": 23.16173536539845, "total": 7377, "Interaction": 25.31104199066874, "Sequence": 25.782583949914628, "Prediction": 24.162011173184357, "Feasibility": 17.391304347826086}}

@@ -15,7 +15,7 @@ from torch.utils.data.dataloader import default_collate
 
 class BaseDataset(Dataset):
     def __init__(
-        self, vis_processor=None, text_processor=None, vis_root=None, ann_paths=[], vis_feat_pt_file=None
+        self, vis_processor=None, text_processor=None, vis_root=None, ann_paths=[], vis_feat_pt_file=None, caption_path=None
     ):
         """
         vis_root (string): Root directory of images (e.g. coco/images/)
@@ -25,6 +25,7 @@ class BaseDataset(Dataset):
 
         self.annotation = []
         self.vis_feat_pt_file=vis_feat_pt_file
+        self.caption_path=caption_path
 
         for ann_path in ann_paths:
             if '.json' in ann_path:

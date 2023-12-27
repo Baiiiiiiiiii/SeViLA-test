@@ -216,8 +216,11 @@ class BaseDatasetBuilder:
                 
             if is_train:
                 vis_feat_path = build_info.visual_feature.train.storage
+                caption_path = build_info.text_caption.train.storage
+                
             else:
                 vis_feat_path = build_info.visual_feature.val.storage
+                caption_path = build_info.text_caption.val.storage
 
             # create datasets
             dataset_cls = self.train_dataset_cls if is_train else self.eval_dataset_cls
@@ -227,6 +230,7 @@ class BaseDatasetBuilder:
                 ann_paths=ann_paths,
                 vis_root=vis_path,
                 vis_feat_pt_file=vis_feat_path,
+                caption_path=caption_path,
             )
 
         return datasets

@@ -1,0 +1,11 @@
+app
+assets
+dataset
+docs
+lavis
+new_files
+result
+run_scripts
+sevila_checkpoints
+sevila_data
+videos

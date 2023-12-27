@@ -1,0 +1,1 @@
+{"test": {"agg_metrics": 25.632701399460412, "total": 7377, "Interaction": 26.127527216174183, "Sequence": 26.20944792259533, "Prediction": 27.932960893854748, "Feasibility": 22.26086956521739}}
