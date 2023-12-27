@@ -17,7 +17,7 @@ run.init_lr=3e-5 \
 run.max_epoch=10 \
 run.warmup_steps=1000 \
 run.accum_grad_iters=2 \
-model.task='qvh_freeze_loc_freeze_train_addfeat_qa_vid' \
+model.task='qvh_freeze_loc_freeze_qa_train_addfeat_qa_vid' \
 model.finetuned=${ckpt} \
 run.task='videoqa'
 

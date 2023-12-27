@@ -1,7 +1,11 @@
 import json
 
 # Load the original JSON data
-input_file_path = '/home/eric/temp/SeViLA-test/result/star_ft_infer_0shot_pdcv_test/result/test_epochbest.json'
+input_file_path = '/home/eric/temp/SeViLA-test/result/best_blip_no_frameidx_test/result/test_epochbest.json'
+# Save the result to a new JSON file
+output_file_path = '/home/eric/temp/SeViLA-test/result/best_blip_no_frameidx_test/result/test_clean.json'  # Specify the desired output file path
+
+
 with open(input_file_path, 'r') as file:
     original_data = json.load(file)
 
@@ -26,8 +30,6 @@ for item in original_data:
 # Convert the organized data dictionary to JSON format
 output_data = json.dumps(organized_data)
 
-# Save the result to a new JSON file
-output_file_path = '/home/eric/temp/SeViLA-test/result/star_ft_infer_0shot_pdcv_test/result/test_clean.json'  # Specify the desired output file path
 with open(output_file_path, 'w') as file:
     file.write(output_data)
 

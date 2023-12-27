@@ -20,9 +20,9 @@ datasets:
         train:
           storage: /home/eric/temp/SeViLA-test/FVQA_train_ViT14_feats.pth
         val:
-          storage: /home/eric/temp/SeViLA-test/FVQA_val_ViT14_feats.pth
+          storage: /home/eric/temp/SeViLA-test/FVQA_test_ViT14_feats.pth
       text_caption:
         train:
-          storage: /home/eric/temp/SeViLA-test/pdvc_qid2cap_dict.pt
+          storage: /home/eric/temp/SeViLA-test/blip_videocap_no_fid.pt
         val:
-          storage: /home/eric/temp/SeViLA-test/pdvc_qid2cap_dict.pt
+          storage: /home/eric/temp/SeViLA-test/blip_videocap_no_fid.pt

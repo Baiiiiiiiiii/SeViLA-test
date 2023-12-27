@@ -350,10 +350,8 @@ class SeViLA(Blip2Base):
                 
                 # ego4d video feature
                 ego4d_feat = self.ego4d_proj(addfeat)  #(b, 1, 768)
-                # print(f'ego4d after proj: {ego4d_feat.shape}')
                 atts_ego4d =torch.ones(ego4d_feat.size()[:-1], dtype=torch.long).to(image.device)
-                atts_ego4d = atts_ego4d.reshape(b, -1)
-                # print(f'ego4d atts: {atts_ego4d.shape}')     
+                atts_ego4d = atts_ego4d.reshape(b, -1)     
                 inputs_t5_qa = torch.cat([vid_prefix_embed, inputs_t5_qa], dim=2) # b, t, n_word + m +8 frames, c
                 atts_t5_qa = torch.cat([vid_prefix_mask, atts_t5_qa], dim=2) # b, t, n_word + m +8 frames
                 inputs_t5_qa = inputs_t5_qa.reshape(b, -1, inputs_t5_qa.shape[-1])
@@ -365,8 +363,7 @@ class SeViLA(Blip2Base):
                 inputs_embeds_qa = self.t5_model.encoder.embed_tokens(input_tokens_qa.input_ids) 
                 inputs_embeds_qa = torch.cat([inputs_t5_qa, ego4d_feat, inputs_embeds_qa], dim=1) #torch.cat([inputs_t5_qa, inputs_embeds_qa], dim=1) 
                 encoder_atts_qa = torch.cat([atts_t5_qa, atts_ego4d, input_tokens_qa.attention_mask], dim=1) #torch.cat([atts_t5_qa, input_tokens_qa.attention_mask], dim=1) 
-                # print(f'inputs_embeds_qa before t5: {inputs_embeds_qa.shape}')
-                # print(f'encoder_atts_qa: {encoder_atts_qa.shape}')
+                
                 output_tokens_qa = self.t5_tokenizer(
                     answer, padding="longest", truncation=True,
                     max_length=self.max_txt_len, return_tensors="pt").to(image.device)
@@ -591,7 +588,10 @@ class SeViLA(Blip2Base):
         out = {}
         image, qid = samples["video"], samples['question_id']
         text_input_qa, answer = samples['qa_input'], samples['qa_output']
-        addfeat = samples['vis_feature']
+        #addfeat = samples['vis_feature']
+        caption = samples['caption_text']
+        # print(caption)
+        # caption = "Bounding Boxes:\n"+caption+" consider objects and their positions, identify any dynamic elements or movements captured within the bounding boxes in the video. "
         # uniform sampling
         if 'loc' not in self.task or 'uni_eval' in self.task:
             b, t, c, w, h = image.shape        
@@ -772,21 +772,32 @@ class SeViLA(Blip2Base):
                     vid_prefix_embed = self.t5_model.encoder.embed_tokens(vid_prefix_id) # b t n_word c
                     
                     # ego4d video feature
-                    ego4d_feat = self.ego4d_proj(addfeat)  #(b, 1, 768)
+                    '''
+                    ego4d_feat = addfeat#self.ego4d_proj(addfeat)  #(b, 1, 768)
                     atts_ego4d =torch.ones(ego4d_feat.size()[:-1], dtype=torch.long).to(image.device)
-                    atts_ego4d = atts_ego4d.reshape(b, -1)  
+                    atts_ego4d = atts_ego4d.reshape(b, -1)
+                    '''  
                     inputs_t5_qa = torch.cat([vid_prefix_embed, inputs_t5_qa], dim=2) # b, t, n_word + m, c
                     atts_t5_qa = torch.cat([vid_prefix_mask, atts_t5_qa], dim=2) # b, t, n_word + m 
                     inputs_t5_qa = inputs_t5_qa.reshape(b, -1, inputs_t5_qa.shape[-1])
                     atts_t5_qa = atts_t5_qa.reshape(b, -1)
-                    
+                    # video->text: caption, Context: objects bbox
+                    #caption = caption #'Caption:'+
+                    # print(f'caption: {caption}')
+                    input_tokens_cap = self.t5_tokenizer(
+                        caption, padding="longest", truncation=True,
+                        max_length=self.max_txt_len, return_tensors="pt").to(image.device)
+                    inputs_embeds_cap = self.t5_model.encoder.embed_tokens(input_tokens_cap.input_ids)
+                    # print(f'inputs_embeds_cap: {inputs_embeds_cap.shape}')
+                    # print(f'cap_atts: {input_tokens_cap.attention_mask.shape}')                    
                     input_tokens_qa = self.t5_tokenizer(
                         text_input_qa, padding="longest", truncation=True,
                         max_length=self.max_txt_len, return_tensors="pt").to(image.device)
                     inputs_embeds_qa = self.t5_model.encoder.embed_tokens(input_tokens_qa.input_ids) 
-                    inputs_embeds_qa = torch.cat([inputs_t5_qa, ego4d_feat, inputs_embeds_qa], dim=1) #cat([inputs_t5_qa, inputs_embeds_qa], dim=1)
-                    encoder_atts_qa = torch.cat([atts_t5_qa, atts_ego4d, input_tokens_qa.attention_mask], dim=1) #cat([atts_t5_qa, input_tokens_qa.attention_mask], dim=1)
-                    
+                    inputs_embeds_qa = torch.cat([inputs_t5_qa, inputs_embeds_cap, inputs_embeds_qa], dim=1) #cat([inputs_t5_qa, inputs_embeds_qa], dim=1)
+                    encoder_atts_qa = torch.cat([atts_t5_qa, input_tokens_cap.attention_mask, input_tokens_qa.attention_mask], dim=1) #cat([atts_t5_qa, input_tokens_qa.attention_mask], dim=1)
+                    # print(f'inputs_embeds_qa after concat: {inputs_embeds_qa.shape}')
+                    # print(f'encoder_atts_qa after concat: {encoder_atts_qa.shape}')
                 else:
                     select_frames_idx = torch.argmax(loc_yes, -1)
                     select_frames = []

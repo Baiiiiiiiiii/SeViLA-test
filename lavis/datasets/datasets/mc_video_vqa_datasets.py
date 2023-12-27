@@ -78,6 +78,7 @@ class MCVideoQADataset(MultimodalClassificationDataset, __DisplMixin):
             # vis_feat = torch.load(self.vis_feat_pt_file)[qid]
             if self.caption_texts!=None:
                 caption_text = self.caption_texts[qid]
+                # caption_text = "Bounding Boxes:\n"+caption_text+" Consider objects and their positions, identify any dynamic elements or movements captured within the bounding boxes in the video. "
             else:
                 caption_text=None
             

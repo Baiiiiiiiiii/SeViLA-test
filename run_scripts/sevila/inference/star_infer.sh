@@ -2,9 +2,10 @@
 result_dir="/home/eric/temp/SeViLA-test/result/"
 
 # exp_name='star_ft_infer'
-exp_name='star_ft_infer_0shot_pdcv_time_test'
+exp_name='best_blip_no_frameidx_test'
 
 ckpt='/home/eric/temp/SeViLA-test/result/star_ft/checkpoint_best.pth'
+# ckpt='/home/eric/temp/SeViLA-test/result/star_ft_ViT_feat/combined_checkpoint_best.pth'
 CUDA_VISIBLE_DEVICES=1 python3 evaluate.py \
 --cfg-path lavis/projects/sevila/eval/star_eval.yaml \
 --options run.output_dir=${result_dir}${exp_name} \

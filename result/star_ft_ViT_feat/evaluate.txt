@@ -1,0 +1,1 @@
+{"val": {"agg_metrics": 59.55860315238958, "total": 7098, "Interaction": 61.25938281901585, "Sequence": 65.14221974344674, "Prediction": 56.730769230769226, "Feasibility": 55.10204081632652}}

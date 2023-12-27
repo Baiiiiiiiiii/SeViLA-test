@@ -1,15 +1,45 @@
 import torch
 
-checkpoint_path = "/home/eric/temp/SeViLA-test/clipvitl14.pth"
-# checkpoint_path = "/home/eric/temp/SeViLA-test/star.pth"
-# checkpoint_path = "/home/eric/temp/SeViLA-test/only_video.pt"
-# video_feat = torch.load(checkpoint_path)["model"]
-video_feat = torch.load(checkpoint_path)
-# video_feat = video_feat.detach().cpu().squeeze(0)
-print(video_feat['ORW6Y'].size())
-print(video_feat['72LJ3'].size())
+# checkpoint_path1 = "/home/eric/temp/SeViLA/result/star_ft_ViT_feat/checkpoint_best.pth"
+# checkpoint_path2 = "/home/eric/temp/SeViLA/result/star_ft/checkpoint_best.pth"
+# # checkpoint_path = "/home/eric/temp/SeViLA-test/star.pth"
+# # checkpoint_path = "/home/eric/temp/SeViLA-test/only_video.pt"
+# # video_feat = torch.load(checkpoint_path)["model"]
+# pt1 = torch.load(checkpoint_path1)
+# pt2 = torch.load(checkpoint_path2)
+# # video_feat = video_feat.detach().cpu().squeeze(0)
+# print(pt1["model"])
+# print(pt2["model"])
+
+
+checkpoint_path1 = "/home/eric/temp/SeViLA/result/star_ft_ViT_feat/checkpoint_best.pth"
+checkpoint_path2 = "/home/eric/temp/SeViLA/result/star_ft/checkpoint_best.pth"
+output_checkpoint_path = "/home/eric/temp/SeViLA/result/star_ft_ViT_feat/combined_checkpoint_best.pth"
+
+
+# Load the checkpoints
+checkpoint1 = torch.load(checkpoint_path1)
+checkpoint2 = torch.load(checkpoint_path2)
+
+# Create a new checkpoint dictionary
+combined_checkpoint = {}
+
+# Copy the state_dict of the first model
+combined_checkpoint["model"] = checkpoint1["model"]
+
+# Update the state_dict with the second model's parameters
+for key, value in checkpoint2["model"].items():
+    if key in combined_checkpoint["model"]:
+        # If the key exists in both models, update the parameters
+        combined_checkpoint["model"][key] = value
+    else:
+        # If the key only exists in the second model, add it to the combined model
+        combined_checkpoint["model"][key] = value
+
+# Save the combined checkpoint
+torch.save(combined_checkpoint, output_checkpoint_path)
 # for k, v in video_feat.items():
-#     print(k)
+    # print(k)
 # print(video_feat["visual_proj.weight"])
 # print(video_feat["adapter_query.weight"].size())
 # print(video_feat["temporal_emb.weight"].size())
